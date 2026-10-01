@@ -72,7 +72,7 @@ function updateCharts() {
                 `Ниже порога: <span class="badge">${data.filtered_count}</span> ` +
                 `VM с угрозой: <span class="badge">${vms}</span>`;
         })
-        .catch(err => { statusDiv.textContent = 'Ошибка: ' + err.message; });
+        .catch(err => { statusDiv.textContent = 'Ошибка : ' + err.message; });
 }
 
 function renderLineChart(records, threshold) {
@@ -143,4 +143,4 @@ document.getElementById('vm_id').addEventListener('change', updateCharts);
 updateCharts();
 </script>
 </body>
-</html>
+</html>    
