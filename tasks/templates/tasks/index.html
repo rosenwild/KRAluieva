@@ -75,7 +75,7 @@ function updateCharts() {
         .catch(err => { statusDiv.textContent = 'Ошибка : ' + err.message; });
 }
 
-function renderLineChart(records, threshold) {
+function renderLineChart(records, threshold) { 
     const byVm = {};
     records.forEach(r => {
         if (!byVm[r.vm_id]) byVm[r.vm_id] = { x: [], y: [] };
