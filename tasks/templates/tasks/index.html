@@ -91,7 +91,7 @@ function renderLineChart(records, threshold) {
         type: 'scatter'
     }));
 
-    if (records.length > 0) {
+    if (records.length > 0) { 
         traces.push({
             x: records.map(r => r.timestamp),
             y: records.map(() => threshold),
