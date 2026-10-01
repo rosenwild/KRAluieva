@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Мониторинг изоляции VM</title>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; background: #f0f2f5; }
+        .container { max-width: 1200px; margin: 20px auto; padding: 0 15px; }
+        h1 { color: #1a1a2e; }
+        .controls { background: white; padding: 20px; border-radius: 8px;
+                    margin-bottom: 20px; box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+                    display: flex; gap: 15px; align-items: center; flex-wrap: wrap; }
+        input, select { padding: 8px; font-size: 15px; border: 1px solid #ccc;
+                        border-radius: 4px; }
+        button { padding: 9px 20px; font-size: 15px; background: #007bff;
+                 color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .chart-box { background: white; border-radius: 8px; padding: 10px;
+                     box-shadow: 0 2px 6px rgba(0,0,0,0.08); min-height: 420px; }
+        .status { margin-top: 12px; font-size: 14px; color: #555; }
+        .badge { display: inline-block; padding: 3px 10px; border-radius: 12px;
+                 background: #e3f2fd; color: #1565c0; margin-left: 6px; }
+        @media (max-width: 900px) { .charts { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>🔒 Обнаружение угроз изоляции данных VM</h1>
+
+    <div class="controls">
+        <label>Порог isolation_score:
+            <input type="number" id="threshold" value="0.5" step="0.05" min="0" max="1">
+        </label>
+        <label>VM:
+            <select id="vm_id">
+                <option value="all">Все</option>
+                <option value="vm-001">vm-001</option>
+                <option value="vm-002">vm-002</option>
+                <option value="vm-003">vm-003</option>
+            </select>
+        </label>
+        <button onclick="updateCharts()">Обновить</button>
+    </div>
+
+    <div class="charts">
+        <div class="chart-box"><div id="chart1"></div></div>
+        <div class="chart-box"><div id="chart2"></div></div>
+    </div>
+
+    <div class="status" id="status">Загрузка…</div>
+</div>
+
+<script>
+function updateCharts() {
+    const threshold = parseFloat(document.getElementById('threshold').value);
+    const vmId = document.getElementById('vm_id').value;
+    const statusDiv = document.getElementById('status');
+    statusDiv.textContent = 'Загрузка…';
+
+    fetch(`/api/plot-data/?threshold=${threshold}&vm_id=${vmId}`)
+        .then(r => r.json())
+        .then(data => {
+            renderLineChart(data.records, threshold);
+            renderScatterChart(data.records);
+
+            const vms = data.threats.length ? data.threats.join(', ') : '—';
+            statusDiv.innerHTML =
+                `Всего точек: <span class="badge">${data.total_count}</span> ` +
+                `Ниже порога: <span class="badge">${data.filtered_count}</span> ` +
+                `VM с угрозой: <span class="badge">${vms}</span>`;
+        })
+        .catch(err => { statusDiv.textContent = 'Ошибка: ' + err.message; });
+}
+
+function renderLineChart(records, threshold) {
+    const byVm = {};
+    records.forEach(r => {
+        if (!byVm[r.vm_id]) byVm[r.vm_id] = { x: [], y: [] };
+        byVm[r.vm_id].x.push(r.timestamp);
+        byVm[r.vm_id].y.push(r.isolation_score);
+    });
+
+    const traces = Object.keys(byVm).map(vm => ({
+        x: byVm[vm].x,
+        y: byVm[vm].y,
+        mode: 'lines+markers',
+        name: vm,
+        type: 'scatter'
+    }));
+
+    if (records.length > 0) {
+        traces.push({
+            x: records.map(r => r.timestamp),
+            y: records.map(() => threshold),
+            mode: 'lines',
+            name: `Порог ${threshold}`,
+            line: { color: 'red', dash: 'dash' },
+            type: 'scatter'
+        });
+    }
+
+    Plotly.newPlot('chart1', traces, {
+        title: 'Динамика показателя изоляции',
+        margin: { l: 40, r: 20, t: 50, b: 40 },
+        height: 400
+    }, { responsive: true });
+}
+
+function renderScatterChart(records) {
+    const colors = { low: 'green', medium: 'orange', high: 'red' };
+    const levels = ['low', 'medium', 'high'];
+    const traces = levels.map(level => {
+        const filtered = records.filter(r => r.threat_level === level);
+        return {
+            x: filtered.map(r => r.cpu_usage),
+            y: filtered.map(r => r.network_in),
+            text: filtered.map(r => `${r.vm_id} (score=${r.isolation_score})`),
+            mode: 'markers',
+            type: 'scatter',
+            name: level,
+            marker: {
+                color: colors[level],
+                size: filtered.map(r => r.memory_usage / 4 + 6)
+            }
+        };
+    });
+
+    Plotly.newPlot('chart2', traces, {
+        title: 'Карта угроз',
+        xaxis: { title: 'CPU usage (%)' },
+        yaxis: { title: 'Network IN (KB)' },
+        margin: { l: 50, r: 20, t: 50, b: 50 },
+        height: 400
+    }, { responsive: true });
+}
+
+document.getElementById('threshold').addEventListener('input', updateCharts);
+document.getElementById('vm_id').addEventListener('change', updateCharts);
+
+updateCharts();
+</script>
+</body>
+</html>
